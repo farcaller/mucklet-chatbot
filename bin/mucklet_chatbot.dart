@@ -204,10 +204,17 @@ class PingEvent extends ResEvent {}
 class PingableEvents {
   final ResClient _client;
   late final StreamController<ResEvent> _eventsController;
+  late final StreamSubscription _periodic;
 
   PingableEvents(this._client)
       : _eventsController = StreamController.broadcast() {
+    _periodic = Stream.periodic(const Duration(minutes: 3))
+        .listen((_) => _eventsController.add(PingEvent()));
     _client.events.listen((event) => _eventsController.add(event));
+  }
+
+  dispose() {
+    _periodic.cancel();
   }
 
   Stream<ResEvent> get events => _eventsController.stream;
