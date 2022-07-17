@@ -221,7 +221,7 @@ class PingableEvents {
 }
 
 final parser = ArgParser()
-  ..addOption('config', help: 'path to the config file', mandatory: true);
+  ..addOption('config', help: 'path to the config file');
 
 void main(List<String> arguments) async {
   runtime_metrics.register();
@@ -237,12 +237,15 @@ void main(List<String> arguments) async {
     args = parser.parse(arguments);
   } catch (e) {
     print('mucklet_chatbot usage:');
-    print('mucklet_chatbot --config CONFIG');
+    print('mucklet_chatbot [--config CONFIG]');
     print(parser.usage);
     exit(2);
   }
 
-  final env = DotEnv(includePlatformEnvironment: true)..load([args['config']]);
+  final env = DotEnv(includePlatformEnvironment: true);
+  if (args['config'] != null) {
+    env.load(args['config']);
+  }
 
   final name = env['USER'] ?? '';
   var hash = env['HASH'];
