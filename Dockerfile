@@ -13,7 +13,7 @@ RUN dart compile exe bin/mucklet_chatbot.dart -o bin/mucklet_chatbot
 
 # Build minimal serving image from AOT-compiled `/server` and required system
 # libraries and configuration files stored in `/runtime/` from the build stage.
-FROM scratch
+FROM alpine:latest
 COPY --from=build /runtime/ /
 COPY --from=build /app/bin/mucklet_chatbot /app/bin/
 
