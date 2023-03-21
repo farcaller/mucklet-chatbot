@@ -10,3 +10,4 @@ data/*.yaml
 
 .devenv/
 .direnv/
+/result
