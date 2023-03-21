@@ -236,7 +236,7 @@ void main(List<String> arguments) async {
     env.load(args['config']);
   }
 
-  String token = env['TOEKN']!;
+  String token = env['AUTH_TOKEN']!;
   final server = env['SERVER'] ?? '';
   final statusWebserverHost = env['STATUS_WEBSERVER_HOST'];
   final statusWebserverPort = env['STATUS_WEBSERVER_PORT'];
