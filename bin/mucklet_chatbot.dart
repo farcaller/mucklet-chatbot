@@ -44,7 +44,7 @@ Router statusRouter(ResClient client) {
 
   app.post('/debugz/cache/subscribe/<rid>', (Request request) async {
     final rid = request.params['rid'] ?? '';
-    final resp = client.subscribe(rid);
+    final resp = client.subscribe(rid, null);
 
     return Response.ok(jsonEncode(resp),
         headers: {'content-type': 'text/plain'});
@@ -96,50 +96,38 @@ Future<ResModel> controlCharacter(
 
 Future workerLoop(
   ResClient client, {
+  required Uri uri,
   required Stream events,
-  required String name,
-  required String hash,
-  required String characterName,
-  required String characterSurname,
+  required String token,
   required dynamic config,
 }) async {
   ResModel? ctrl;
+  ResModel? bot;
 
   await for (final e in events) {
     switch (e.runtimeType) {
       case ConnectedEvent:
-        logger.info('authenticating as $name');
-        await client.auth('auth', 'login', params: {
-          'name': name,
-          'hash': hash,
+        logger.info('authenticating');
+        await client.auth('auth', 'authenticateBot', params: {
+          'token': token,
         });
         logger.info('auth success');
-        final player = await client.call('core', 'getPlayer') as ResModel;
-        logger.info('got player $player');
-        final char = findCharacter(player, characterName, characterSurname);
-        logger.info('got character $char');
-        ctrl = await controlCharacter(client, player, char);
+        bot = await client.call('core', 'getBot') as ResModel;
+        logger.info('got bot $bot');
+        await client.subscribe('core.chars', 'awake');
+        ctrl = bot['controlled'] != null
+            ? bot['controlled'] as ResModel
+            : await client.call(bot.rid, 'controlChar') as ResModel;
+        if (ctrl['state'] != 'awake') {
+          await client.call(ctrl.rid, 'wakeup');
+        }
         break;
       case DisconnectedEvent:
         logger.warning('disconnected, trying to reconnect');
-        client.reconnect();
-        break;
-      case ModelChangedEvent:
-        // logger.debug(
-        //     '=== model changed ${e.rid}:\nnew: ${e.newProps}\nold: ${e.oldProps}');
-        break;
-      case CollectionAddEvent:
-        // logger.debug(
-        //     '=== collection add ${e.rid}:\nidx: ${e.index}\nval: ${e.value}');
-        break;
-      case CollectionRemoveEvent:
-        // logger.debug(
-        //     '=== collection remove ${e.rid}:\nidx: ${e.index}\nval: ${e.value}');
+        await client.reconnect(uri);
         break;
       case GenericEvent:
         final evt = e as GenericEvent;
-        // logger.debug(
-        //     '=== generic ${evt.rid}:\nname: ${evt.name}\ndata: ${evt.payload}');
 
         if (ctrl != null) {
           if (evt.rid == ctrl.rid && evt.name == 'out') {
@@ -154,6 +142,7 @@ Future workerLoop(
             await client.call(ctrl.rid, 'look', params: {'charId': ctrl['id']});
           } catch (e) {
             logger.error('ping failed: $e');
+            rethrow;
           }
         }
         break;
@@ -232,7 +221,7 @@ void main(List<String> arguments) async {
     labelNames: ['query'],
   )..register();
 
-  var args;
+  ArgResults args;
   try {
     args = parser.parse(arguments);
   } catch (e) {
@@ -247,14 +236,7 @@ void main(List<String> arguments) async {
     env.load(args['config']);
   }
 
-  final name = env['USER'] ?? '';
-  var hash = env['HASH'];
-  if (hash == null) {
-    final password = env['PASSWORD'] ?? '';
-    hash = saltPassword(password);
-  }
-  final characterName = env['CHARACTER_NAME'] ?? '';
-  final characterSurname = env['CHARACTER_SURNAME'] ?? '';
+  String token = env['TOEKN']!;
   final server = env['SERVER'] ?? '';
   final statusWebserverHost = env['STATUS_WEBSERVER_HOST'];
   final statusWebserverPort = env['STATUS_WEBSERVER_PORT'];
@@ -262,21 +244,13 @@ void main(List<String> arguments) async {
   final file = File(env['CONFIG'] ?? '');
   final config = loadYaml(await file.readAsString());
 
-  logger.info(
-      'running as character $characterName $characterSurname owned by $name');
-
-  final client = ResClient(Uri.parse(server));
+  final client = ResClient();
   final pe = PingableEvents(client);
 
-  client.reconnect();
+  client.reconnect(Uri.parse(server));
 
   final worker = workerLoop(client,
-      events: pe.events,
-      name: name,
-      hash: hash,
-      characterName: characterName,
-      characterSurname: characterSurname,
-      config: config);
+      uri: Uri.parse(server), events: pe.events, token: token, config: config);
 
   final statusServer =
       statusWebserverHost != null && statusWebserverPort != null
