@@ -216,7 +216,7 @@ void main(List<String> arguments) async {
   runtime_metrics.register();
 
   queryRequestsCounter = Counter(
-    name: 'query_requests_total',
+    name: 'mucklet_chatbot_query_requests_total',
     help: 'The total amount of queries.',
     labelNames: ['query'],
   )..register();
