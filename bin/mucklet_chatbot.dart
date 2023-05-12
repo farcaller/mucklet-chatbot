@@ -22,6 +22,8 @@ const logger = GlogContext('main');
 
 Counter? queryRequestsCounter;
 Counter? cacheSizeCounter;
+Counter? resEventsCounter;
+Counter? messageCounter;
 
 Router statusRouter(ResClient client) {
   final app = Router();
@@ -105,6 +107,7 @@ Future workerLoop(
   ResModel? bot;
 
   await for (final e in events) {
+    resEventsCounter!.labels(['${e.runtimeType}']).inc();
     switch (e.runtimeType) {
       case ConnectedEvent:
         logger.info('authenticating');
@@ -163,6 +166,8 @@ Future handleOutEvent(
     logger.warning('no message in $payload');
     return;
   }
+  messageCounter!.labels([payload['type']]).inc();
+
   msg = msg.toLowerCase();
   final reply = config[msg] as List?;
   if (reply != null) {
@@ -219,6 +224,18 @@ void main(List<String> arguments) async {
     name: 'mucklet_chatbot_query_requests_total',
     help: 'The total amount of queries.',
     labelNames: ['query'],
+  )..register();
+
+  resEventsCounter = Counter(
+    name: 'mucklet_res_events_total',
+    help: 'The total amount of RES events.',
+    labelNames: ['event'],
+  )..register();
+
+  messageCounter = Counter(
+    name: 'mucklet_incoming_messages_total',
+    help: 'The total amount of incoming messages.',
+    labelNames: ['type'],
   )..register();
 
   ArgResults args;
