@@ -107,6 +107,27 @@ Future workerLoop(
   ResModel? ctrl;
   ResModel? bot;
 
+  roomPopsGauge = Gauge(
+    name: 'mucklet_room_population',
+    help: 'The current population of the room.',
+    labelNames: ['parent', 'room'],
+    collectCallback: (collector) {
+      final rids = client.cachedRids
+          .where((r) => r.startsWith('core.area.') && r.endsWith('.children'));
+      for (final r in rids) {
+        final parent = r.split('.')[2];
+        final children = client.get(r)!.item as ResModel;
+        final childrenKv = children.toJson();
+        for (final m in childrenKv.values) {
+          final v = (m as ResModel).toJson();
+          final name = v['name'];
+          final pop = v['pop'] as int;
+          roomPopsGauge!.labels([parent, name]).value = pop.toDouble();
+        }
+      }
+    },
+  )..register();
+
   await for (final e in events) {
     resEventsCounter!.labels(['${e.runtimeType}']).inc();
     switch (e.runtimeType) {
@@ -215,39 +236,6 @@ class PingableEvents {
   Stream<ResEvent> get events => _eventsController.stream;
 }
 
-class RoomPopWatcher {
-  final ResClient _client;
-  late final StreamController<ResEvent> _eventsController;
-  late final StreamSubscription _periodic;
-
-  RoomPopWatcher(this._client)
-      : _eventsController = StreamController.broadcast() {
-    _periodic = Stream.periodic(const Duration(seconds: 5)).listen(update);
-  }
-
-  update(dynamic _) {
-    final rids = _client.cachedRids
-        .where((r) => r.startsWith('core.area.') && r.endsWith('.children'));
-    for (final r in rids) {
-      final parent = r.split('.')[2];
-      final children = _client.get(r)!.item as ResModel;
-      final childrenKv = children.toJson();
-      for (final m in childrenKv.values) {
-        final v = (m as ResModel).toJson();
-        final name = v['name'];
-        final pop = v['pop'] as int;
-        roomPopsGauge!.labels([parent, name]).value = pop.toDouble();
-      }
-    }
-  }
-
-  dispose() {
-    _periodic.cancel();
-  }
-
-  Stream<ResEvent> get events => _eventsController.stream;
-}
-
 final parser = ArgParser()
   ..addOption('config', help: 'path to the config file');
 
@@ -270,12 +258,6 @@ void main(List<String> arguments) async {
     name: 'mucklet_incoming_messages_total',
     help: 'The total amount of incoming messages.',
     labelNames: ['type'],
-  )..register();
-
-  roomPopsGauge = Gauge(
-    name: 'mucklet_room_population',
-    help: 'The current population of the room.',
-    labelNames: ['parent', 'room'],
   )..register();
 
   ArgResults args;
@@ -305,8 +287,6 @@ void main(List<String> arguments) async {
   final pe = PingableEvents(client);
 
   client.reconnect(Uri.parse(server));
-
-  RoomPopWatcher(client);
 
   final worker = workerLoop(client,
       uri: Uri.parse(server), events: pe.events, token: token, config: config);
