@@ -92,7 +92,7 @@ Future<ResModel> controlCharacter(
   }
   if (ctrl['state'] != 'awake') {
     logger.info('ctrl state is ${ctrl['state']}, waking up');
-    await client.call(ctrl.rid, 'wakeup');
+    await client.call(ctrl.rid, 'wakeup', params: {'hidden': true});
   }
   return ctrl;
 }
@@ -144,7 +144,7 @@ Future workerLoop(
             ? bot['controlled'] as ResModel
             : await client.call(bot.rid, 'controlChar') as ResModel;
         if (ctrl['state'] != 'awake') {
-          await client.call(ctrl.rid, 'wakeup');
+          await client.call(ctrl.rid, 'wakeup', params: {'hidden': true});
         }
         break;
       case DisconnectedEvent:
